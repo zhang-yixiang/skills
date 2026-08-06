@@ -22,6 +22,14 @@ Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so th
 
 Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
 
+Run the bundled growth report against the same fixed point:
+
+```bash
+node <skill-dir>/scripts/file-growth-report.mjs <fixed-point>
+```
+
+The report ranks both concentrated additions and already-large changed files. It is triage input, not a violation or a reason to split by itself. Use `--worktree` only when the declared review scope also includes staged, unstaged, and untracked changes; never let the report silently broaden the diff being reviewed.
+
 ### 2. Identify the spec source
 
 Look for the originating spec, in this order:
@@ -34,6 +42,8 @@ Look for the originating spec, in this order:
 ### 3. Identify the standards sources
 
 Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`.
+
+The Standards axis also reviews **file growth and responsibility placement**. Use the growth report to choose where to inspect, then read the relevant hunks and surrounding owner. Report a judgement-call finding only when the diff concentrates a distinct responsibility, state owner, external interaction, policy, or independently testable behaviour in a file that should not own it, or materially worsens Divergent Change. Line count alone is never a finding. Do not recommend splitting generated/data catalogues solely for size, and do not propose pass-through helpers, thin wrappers, or seams without a real variation boundary. A useful extraction has a small interface, owns meaningful implementation, and reduces what callers must understand.
 
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
@@ -62,8 +72,10 @@ Send a single message with two `Agent` tool calls. Use the `general-purpose` sub
 **Standards sub-agent prompt** — include:
 
 - The full diff command and commit list.
+- The file-growth report, explicitly labelled as triage rather than a threshold or finding.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
+- The file-growth responsibility rule from step 3 pasted in full.
+- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); (b) any baseline smell you spot: name it and quote the hunk; and (c) any responsibility-placement problem supported by the growth triage and inspected code. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells and growth findings are always judgement calls, and a documented repo standard overrides the baseline. Never report line count alone or recommend a pass-through split. Skip anything tooling enforces. Under 400 words."
 
 **Spec sub-agent prompt** — include:
 
