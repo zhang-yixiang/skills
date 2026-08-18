@@ -6,12 +6,14 @@ import { relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_LIMIT = 12;
+const FORMAT_VERSION = 2;
 const MAX_BUFFER = 64 * 1024 * 1024;
 
 function usage() {
   return `Usage: node file-growth-report.mjs <fixed-point> [options]
 
 Options:
+  --head <ref>     Review an exact head ref (default: HEAD).
   --worktree       Include staged, unstaged, and untracked worktree changes.
   --limit <count>  Rows per ranking (default: ${DEFAULT_LIMIT}).
   --json           Emit machine-readable JSON.
@@ -20,6 +22,7 @@ Options:
 
 function parseArgs(argv) {
   let fixedPoint;
+  let head = "HEAD";
   let worktree = false;
   let json = false;
   let limit = DEFAULT_LIMIT;
@@ -28,6 +31,13 @@ function parseArgs(argv) {
     const argument = argv[index];
     if (argument === "--worktree") {
       worktree = true;
+    } else if (argument === "--head") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("-")) {
+        throw new Error("--head requires a ref");
+      }
+      head = value;
+      index += 1;
     } else if (argument === "--json") {
       json = true;
     } else if (argument === "--help" || argument === "-h") {
@@ -49,7 +59,7 @@ function parseArgs(argv) {
   }
 
   if (!fixedPoint) throw new Error("fixed point is required");
-  return { fixedPoint, worktree, json, limit, help: false };
+  return { fixedPoint, head, worktree, json, limit, help: false };
 }
 
 function runGit(args, { cwd, allowFailure = false } = {}) {
@@ -75,6 +85,102 @@ function splitNul(buffer) {
   const fields = buffer.toString("utf8").split("\0");
   if (fields.at(-1) === "") fields.pop();
   return fields;
+}
+
+function sortPaths(paths) {
+  return [...paths].sort((left, right) => {
+    if (left < right) return -1;
+    if (left > right) return 1;
+    return 0;
+  });
+}
+
+function resolveCommit(root, label, ref) {
+  const result = runGit(
+    [
+      "-c",
+      "core.warnAmbiguousRefs=true",
+      "rev-parse",
+      "--verify",
+      "--end-of-options",
+      `${ref}^{commit}`,
+    ],
+    { cwd: root, allowFailure: true },
+  );
+  const stderr = result.stderr?.toString("utf8").trim() ?? "";
+
+  if (result.status !== 0) {
+    throw new Error(`${label} does not resolve to a commit: ${ref}`);
+  }
+  if (/ambiguous/i.test(stderr)) {
+    throw new Error(`${label} is ambiguous: ${ref}`);
+  }
+
+  const commits = result.stdout
+    .toString("utf8")
+    .split(/\r?\n/)
+    .filter(Boolean);
+  if (commits.length !== 1 || !/^[0-9a-f]{40,64}$/.test(commits[0])) {
+    throw new Error(`${label} does not resolve to exactly one commit: ${ref}`);
+  }
+  return commits[0];
+}
+
+function resolveMergeBase(root, baseSha, headSha) {
+  const result = runGit(["merge-base", "--all", baseSha, headSha], {
+    cwd: root,
+    allowFailure: true,
+  });
+  const mergeBases = result.stdout
+    .toString("utf8")
+    .split(/\r?\n/)
+    .filter(Boolean);
+
+  if (result.status !== 0 || mergeBases.length === 0) {
+    throw new Error("fixed point and head have no merge base");
+  }
+  if (mergeBases.length !== 1) {
+    throw new Error(
+      `fixed point and head have multiple merge bases: ${mergeBases.join(", ")}`,
+    );
+  }
+  return mergeBases[0];
+}
+
+function collectDiffPaths(root, revisions) {
+  return sortPaths(
+    splitNul(
+      runGit(
+        [
+          "diff",
+          "--name-only",
+          "-z",
+          "--find-renames",
+          "--no-ext-diff",
+          "--no-textconv",
+          "--ignore-submodules=none",
+          ...revisions,
+          "--",
+        ],
+        { cwd: root },
+      ).stdout,
+    ),
+  );
+}
+
+function collectPathLayers(root, mergeBaseSha, headSha, currentHeadSha) {
+  return {
+    committed: collectDiffPaths(root, [mergeBaseSha, headSha]),
+    staged: collectDiffPaths(root, ["--cached", currentHeadSha]),
+    unstaged: collectDiffPaths(root, []),
+    untracked: sortPaths(
+      splitNul(
+        runGit(["ls-files", "--others", "--exclude-standard", "-z"], {
+          cwd: root,
+        }).stdout,
+      ),
+    ),
+  };
 }
 
 export function parseNumstat(buffer) {
@@ -137,7 +243,7 @@ function isInside(root, path) {
   );
 }
 
-async function readTargetBuffer({ root, path, worktree }) {
+async function readTargetBuffer({ root, path, worktree, headSha }) {
   if (worktree) {
     const absolute = resolve(root, path);
     if (!isInside(root, absolute)) throw new Error(`path leaves repository: ${path}`);
@@ -151,7 +257,7 @@ async function readTargetBuffer({ root, path, worktree }) {
     }
   }
 
-  const result = runGit(["cat-file", "blob", `HEAD:${path}`], {
+  const result = runGit(["cat-file", "blob", `${headSha}:${path}`], {
     cwd: root,
     allowFailure: true,
   });
@@ -167,16 +273,16 @@ function existsAtBase(root, mergeBase, path) {
   );
 }
 
-async function collectUntracked(root) {
-  const paths = splitNul(
-    runGit(["ls-files", "--others", "--exclude-standard", "-z"], {
-      cwd: root,
-    }).stdout,
-  );
+async function collectUntracked(root, paths) {
   const entries = [];
 
   for (const path of paths) {
-    const buffer = await readTargetBuffer({ root, path, worktree: true });
+    const buffer = await readTargetBuffer({
+      root,
+      path,
+      worktree: true,
+      headSha: null,
+    });
     if (buffer === null) continue;
     const binary = isBinary(buffer);
     const total = binary ? null : lineCount(buffer);
@@ -195,8 +301,13 @@ async function collectUntracked(root) {
   return entries;
 }
 
-async function enrichEntry(entry, { root, mergeBase, worktree }) {
-  const buffer = await readTargetBuffer({ root, path: entry.path, worktree });
+async function enrichEntry(entry, { root, mergeBase, headSha, worktree }) {
+  const buffer = await readTargetBuffer({
+    root,
+    path: entry.path,
+    worktree,
+    headSha,
+  });
   const binary = entry.binary || (buffer !== null && isBinary(buffer));
   let status = "M";
   if (entry.oldPath) status = "R";
@@ -250,9 +361,13 @@ function renderText(report) {
 
   return [
     "File growth report (review signal only; line count is not a violation)",
-    `fixed point: ${report.fixedPoint}`,
-    `merge base:  ${report.mergeBase}`,
-    `target:      ${report.target}`,
+    `base input:  ${report.input.fixedPoint}`,
+    `base commit: ${report.resolved.baseSha}`,
+    `head input:  ${report.input.head}`,
+    `head commit: ${report.resolved.headSha}`,
+    `merge base:  ${report.resolved.mergeBaseSha}`,
+    `scope:       ${report.target}`,
+    `path layers: committed ${report.paths.committed.length}, staged ${report.paths.staged.length}, unstaged ${report.paths.unstaged.length}, untracked ${report.paths.untracked.length}`,
     `changed:     ${report.files.length} files (${textFiles.length} reviewable text, ${binaryCount} binary)`,
     "",
     `Most added lines (top ${report.limit})`,
@@ -265,32 +380,71 @@ function renderText(report) {
   ].join("\n");
 }
 
-export async function buildReport({ fixedPoint, worktree, limit, cwd }) {
+export async function buildReport({
+  fixedPoint,
+  head = "HEAD",
+  worktree = false,
+  limit = DEFAULT_LIMIT,
+  cwd,
+}) {
   const root = gitText(["rev-parse", "--show-toplevel"], { cwd });
-  const fixedResult = runGit(
-    ["rev-parse", "--verify", "--end-of-options", `${fixedPoint}^{commit}`],
-    { cwd: root, allowFailure: true },
-  );
-  if (fixedResult.status !== 0) throw new Error(`fixed point does not resolve: ${fixedPoint}`);
+  const baseSha = resolveCommit(root, "fixed point", fixedPoint);
+  const headSha = resolveCommit(root, "head", head);
+  const currentHeadSha = resolveCommit(root, "current HEAD", "HEAD");
+  const mergeBaseSha = resolveMergeBase(root, baseSha, headSha);
 
-  const fixedCommit = fixedResult.stdout.toString("utf8").trim();
-  const mergeBase = gitText(["merge-base", fixedCommit, "HEAD"], { cwd: root });
-  const diffArgs = ["diff", "--numstat", "-z", "--find-renames", mergeBase];
-  if (!worktree) diffArgs.push("HEAD");
+  if (worktree && headSha !== currentHeadSha) {
+    throw new Error(
+      `--worktree requires --head to resolve to current HEAD (${currentHeadSha})`,
+    );
+  }
+
+  const paths = collectPathLayers(root, mergeBaseSha, headSha, currentHeadSha);
+  const diffArgs = [
+    "diff",
+    "--numstat",
+    "-z",
+    "--find-renames",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--ignore-submodules=none",
+    mergeBaseSha,
+  ];
+  if (!worktree) diffArgs.push(headSha);
   diffArgs.push("--");
 
   const parsed = parseNumstat(runGit(diffArgs, { cwd: root }).stdout);
   const files = [];
   for (const entry of parsed) {
-    files.push(await enrichEntry(entry, { root, mergeBase, worktree }));
+    files.push(
+      await enrichEntry(entry, {
+        root,
+        mergeBase: mergeBaseSha,
+        headSha,
+        worktree,
+      }),
+    );
   }
-  if (worktree) files.push(...(await collectUntracked(root)));
+  if (worktree) files.push(...(await collectUntracked(root, paths.untracked)));
 
   return {
-    fixedPoint,
-    fixedCommit,
-    mergeBase,
-    target: worktree ? "worktree" : "HEAD",
+    formatVersion: FORMAT_VERSION,
+    repositoryRoot: root,
+    input: {
+      fixedPoint,
+      head,
+      worktree,
+    },
+    resolved: {
+      baseSha,
+      headSha,
+      mergeBaseSha,
+      currentHeadSha,
+    },
+    paths,
+    target: worktree
+      ? "committed + staged + unstaged + untracked"
+      : "committed",
     limit,
     files,
   };

@@ -1,6 +1,6 @@
 ## What it does
 
-`code-review` reviews the diff between `HEAD` and a fixed point you name — a commit, a branch, a tag, `main`, `HEAD~5` — along two axes. **Standards** asks whether the code follows how this repo writes code. **Spec** asks whether the code does what the originating issue or [spec](https://www.aihero.dev/ai-coding-dictionary/spec) asked for. Each axis runs in its own [sub-agent](https://www.aihero.dev/ai-coding-dictionary/subagent) so neither sees the other's reasoning.
+`code-review` reviews an exact declared change scope between a fixed point you name — a commit, a branch, a tag, `main`, `HEAD~5` — and a selected head (`HEAD` by default), along two axes. **Standards** asks whether the code follows how this repo writes code. **Spec** asks whether the code does what the originating issue or [spec](https://www.aihero.dev/ai-coding-dictionary/spec) asked for. Each axis runs in its own [sub-agent](https://www.aihero.dev/ai-coding-dictionary/subagent) so neither sees the other's reasoning.
 
 The two axes are never merged and never re-ranked. The report ends with a worst issue *per axis* and refuses to name a single winner across them, because a change can pass one axis and fail the other: code that follows every convention while implementing the wrong thing passes Standards and fails Spec; code that does exactly what the [ticket](https://www.aihero.dev/ai-coding-dictionary/ticket) asked while breaking the repo's conventions does the reverse. A blended verdict lets the passing axis hide the failing one.
 
@@ -17,7 +17,9 @@ Type `/code-review`, or the agent reaches for it automatically when you ask to r
 | The whole codebase has drifted, not one diff | [improve-codebase-architecture](https://aihero.dev/skills-improve-codebase-architecture) |
 | Something is broken and you do not know why | [diagnosing-bugs](https://aihero.dev/skills-diagnosing-bugs) |
 
-You must supply the fixed point. If you do not, the skill asks for one rather than guessing; it then checks the ref resolves and the diff is non-empty before spawning anything, so a typo'd branch name fails in front of you instead of inside two sub-agents.
+You must supply the fixed point. If you do not, the skill asks for one rather than guessing. The selected head defaults to `HEAD`, but can also be pinned explicitly. Before spawning anything, the preflight resolves both inputs to exact commits, requires one merge-base, and rejects missing, non-commit, or ambiguous refs.
+
+The default scope is committed work from the merge-base through the selected head. A work-in-progress review can explicitly add staged, unstaged, and untracked work with `--worktree`, but only when the selected head is the current `HEAD`. The preflight always reports four separate path lists — committed, staged, unstaged, and untracked — so dirty work cannot be silently included or silently overlooked.
 
 ## Prerequisites
 
@@ -45,6 +47,8 @@ A generic review skill that does not know your standards is the thing this desig
 
 The **smell baseline** is the floor underneath it: twelve Fowler code smells from _Refactoring_ ch.3 — Mysterious Name, Duplicated Code, Feature Envy, Data Clumps, Primitive Obsession, Repeated Switches, Shotgun Surgery, Divergent Change, Speculative Generality, Message Chains, Middle Man, Refused Bequest. Each is a labelled heuristic ("possible Feature Envy"), never a hard violation, and each is stated as *what it is* → *how to fix*, so a finding arrives with a move attached rather than a complaint. Anything your linter already enforces is skipped by both axes.
 
+Both axes share an evidence discipline without becoming a third review axis: trace both sides of changed interfaces, follow resource and async lifecycles to cleanup/error paths, verify the real shipped entry or registration, and check whether tests actually observe the target invariant. These checks substantiate a Standards or Spec finding; they do not turn the skill into a general bug hunt.
+
 ## Common questions
 
 **It collides with Claude Code's own `/code-review`. What do I do?**
@@ -53,7 +57,7 @@ This is the most reported problem with the skill, and it is not fixed. Claude Co
 
 **Its sub-agents keep invoking `/code-review` again and spawn more agents.**
 
-Known open bug, reproduced by several people and in more than one harness. The Standards and Spec prompts do not forbid delegation, so a sub-agent can rediscover the skill and fan out again — one report reached 50-plus agents. The fix people have applied on forks is one line appended to both sub-agent briefs: "Do not invoke `/code-review` or spawn additional agents — perform this review directly." Some prefer to handle it at the harness level so every skill inherits the guard. Neither is in the shipped skill yet. If you run this unattended, watch the agent count.
+Fixed in this skill. Both sub-agent briefs now say not to invoke `$code-review` or spawn additional agents, so the Standards and Spec workers perform their assigned axis directly instead of rediscovering the parent workflow.
 
 **Should I run it in the same [session](https://www.aihero.dev/ai-coding-dictionary/session) that wrote the code?**
 
@@ -73,13 +77,16 @@ Because fixes create new surface, and because the judgement-call half of the Sta
 
 **Does it review my uncommitted work?**
 
-No. It diffs `<fixed-point>...HEAD`, three-dot, which is measured from the merge-base and excludes staged and working-tree changes. If `implement` has not made an interim commit, the work about to be committed is invisible to the review. Commit first, then review, then amend or add a fixup.
+Yes, when you declare a worktree review. That scope includes committed, staged, unstaged, and untracked paths; the same manifest is passed to both axes. A normal branch or PR review remains committed-only, and the preflight reports any dirty layers as excluded rather than broadening the review silently.
 
 ## It's working if
 
 - It refuses to start on a bad ref or an empty diff, before any sub-agent is spawned.
+- It rejects ambiguous refs, histories with zero or multiple merge-bases, and a worktree review whose selected head is not current `HEAD`.
+- Its manifest resolves exact base/head/merge-base SHAs and keeps committed, staged, unstaged, and untracked paths separate.
 - The report arrives as two separate blocks under `## Standards` and `## Spec`, not one merged list.
 - Every Standards finding names either a rule in one of your repo's files or one of the twelve smells, with the hunk quoted; every Spec finding quotes a line of the spec.
+- Findings that depend on an interface, lifecycle, runtime entry, or test cite the corresponding producer/consumer, cleanup path, shipped wiring, or sensitive assertion instead of inferring from an isolated helper.
 - The closing summary gives a worst issue per axis and declines to pick an overall winner.
 - With no spec available, the Spec block says so instead of listing requirements it inferred from the code.
 

@@ -3,7 +3,7 @@ name: code-review
 description: Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes — Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to "review since X".
 ---
 
-Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
+Two-axis review of an exact declared change scope between a fixed point the user supplies and a selected head (`HEAD` by default):
 
 - **Standards** — does the code conform to this repo's documented coding standards?
 - **Spec** — does the code faithfully implement the originating issue / spec?
@@ -14,21 +14,35 @@ The issue tracker should have been provided to you. If `docs/agents/issue-tracke
 
 ## Process
 
-### 1. Pin the fixed point
+### 1. Pin the exact change scope
 
-Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it.
+Whatever the user said is the fixed point — a commit SHA, branch name, tag, `main`, `HEAD~5`, etc. If they didn't specify one, ask for it. The head defaults to `HEAD` unless the user supplied another ref.
 
-Capture the diff command once: `git diff <fixed-point>...HEAD` (three-dot, so the comparison is against the merge-base). Also note the list of commits via `git log <fixed-point>..HEAD --oneline`.
+Declare the review scope before inspecting the diff:
 
-Before going further, confirm the fixed point resolves (`git rev-parse <fixed-point>`) and the diff is non-empty. A bad ref or empty diff should fail here — not inside two parallel sub-agents.
+- `committed` (default for a branch, PR, or "since X"): merge-base through the selected head.
+- `worktree` (when the user asks to review work in progress or uncommitted work): committed, staged, unstaged, and untracked layers together.
 
-Run the bundled growth report against the same fixed point:
+Run the bundled preflight and growth report:
 
 ```bash
-node <skill-dir>/scripts/file-growth-report.mjs <fixed-point>
+node <skill-dir>/scripts/file-growth-report.mjs <fixed-point> --head <head> --json
+# Add --worktree only for the declared worktree scope.
 ```
 
-The report ranks both concentrated additions and already-large changed files. It is triage input, not a violation or a reason to split by itself. Use `--worktree` only when the declared review scope also includes staged, unstaged, and untracked changes; never let the report silently broaden the diff being reviewed.
+The preflight rejects a missing, non-commit, or ambiguous ref; zero or multiple merge-bases; and `--worktree` against a head other than the current `HEAD`. Its versioned JSON pins `resolved.baseSha`, `resolved.headSha`, and `resolved.mergeBaseSha`, then partitions `paths.committed`, `paths.staged`, `paths.unstaged`, and `paths.untracked`.
+
+Use those resolved SHAs and path lists as the single scope manifest for both sub-agents:
+
+- committed diff: `git diff <mergeBaseSha> <headSha> --`
+- staged diff, only for worktree scope: `git diff --cached --`
+- unstaged diff, only for worktree scope: `git diff --`
+- untracked files, only for worktree scope: read exactly the reported `paths.untracked` files
+- commit list: `git log <mergeBaseSha>..<headSha> --oneline`
+
+If a dirty layer is not in the declared scope, state that it is excluded. Confirm the declared scope is non-empty before spawning either sub-agent. Never let a report or prompt silently broaden or narrow it.
+
+The report's `files` ranking covers both concentrated additions and already-large changed files. It is triage input, not a violation or a reason to split by itself.
 
 ### 2. Identify the spec source
 
@@ -65,25 +79,36 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
 
-### 4. Spawn both sub-agents in parallel
+### 4. Apply shared evidence discipline
+
+Both axes use the following rules to substantiate findings within their own question; these rules do not create a third general-bug axis:
+
+- **Trace both sides of changed interfaces.** Inspect the producer and every in-scope consumer, including serialization, adapters, and call sites; a type or helper in isolation does not prove the contract is wired correctly.
+- **Trace full lifecycles.** For resources and asynchronous work, follow creation/start through ownership/use to cancellation, disposal, error recovery, and replacement. A finding must name a reachable path, not a theoretical interleaving.
+- **Verify the shipped entry.** Confirm the changed behavior is reachable through the real runtime entry, registration, route, build input, or package export; helper-only and test-only paths are insufficient evidence.
+- **Check test sensitivity.** A passing or present test is evidence only when its assertion observes the target invariant. For a claimed coverage gap, name the target regression or negative control the assertion would fail to catch; otherwise report an evidence gap, not confirmed protection.
+
+### 5. Spawn both sub-agents in parallel
 
 **Standards sub-agent prompt** — include:
 
-- The full diff command and commit list.
+- The exact scope manifest, all included layer commands/path lists, excluded dirty layers, and commit list.
 - The file-growth report, explicitly labelled as triage rather than a threshold or finding.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
 - The file-growth responsibility rule from step 3 pasted in full.
-- The brief: "Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); (b) any baseline smell you spot: name it and quote the hunk; and (c) any responsibility-placement problem supported by the growth triage and inspected code. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells and growth findings are always judgement calls, and a documented repo standard overrides the baseline. Never report line count alone or recommend a pass-through split. Skip anything tooling enforces. Under 400 words."
+- The shared evidence discipline from step 4 pasted in full.
+- The brief: "Review only the declared scope. Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); (b) any baseline smell you spot: name it and quote the hunk; and (c) any responsibility-placement problem supported by the growth triage and inspected code. Use the shared evidence discipline to verify claims on this axis, not to start a separate general-bug review. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells and growth findings are always judgement calls, and a documented repo standard overrides the baseline. Never report line count alone or recommend a pass-through split. Skip anything tooling enforces. Do not invoke $code-review or spawn further agents; perform this axis directly. Under 400 words."
 
 **Spec sub-agent prompt** — include:
 
-- The diff command and commit list.
+- The exact scope manifest, all included layer commands/path lists, excluded dirty layers, and commit list.
 - The path or fetched contents of the spec.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+- The shared evidence discipline from step 4 pasted in full.
+- The brief: "Review only the declared scope. Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Use the shared evidence discipline to verify claims on this axis, not to start a separate general-bug review. Quote the spec line and implementation evidence for each finding. Do not invoke $code-review or spawn further agents; perform this axis directly. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
 
-### 5. Aggregate
+### 6. Aggregate
 
 Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings — the two axes are deliberately separate (see _Why two axes_).
 
