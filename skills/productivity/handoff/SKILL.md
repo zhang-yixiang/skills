@@ -5,7 +5,7 @@ description: Compact the current conversation into a handoff document for anothe
 
 Write a handoff document summarising the current conversation so a fresh agent can continue the work. Save to the temporary directory of the user's OS - not the current workspace.
 
-Include a "suggested skills" section in the document, which suggests skills that the agent should invoke.
+Include a "suggested skills" section in the document, naming the `$skill-name` invocations the next agent should use.
 
 Do not duplicate content already captured in other artifacts (specs, plans, ADRs, issues, commits, diffs). Reference them by path or URL instead.
 
