@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { parseNumstat } from "./file-growth-report.mjs";
 
 const scriptPath = fileURLToPath(new URL("./file-growth-report.mjs", import.meta.url));
+const skillDir = fileURLToPath(new URL("../", import.meta.url));
 
 function git(cwd, args) {
   return execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -57,6 +58,21 @@ test("parseNumstat handles ordinary, renamed, and binary entries", () => {
     { path: "new.ts", oldPath: "old.ts", added: 1, deleted: 0, binary: false },
     { path: "image.png", oldPath: null, added: null, deleted: null, binary: true },
   ]);
+});
+
+test("runs the CLI through a symlinked skill directory", () => {
+  const linkedRoot = mkdtempSync(join(tmpdir(), "linked-code-review-"));
+  const linkedSkillDir = join(linkedRoot, "code-review");
+  symlinkSync(skillDir, linkedSkillDir, "dir");
+
+  const result = spawnSync(
+    process.execPath,
+    [join(linkedSkillDir, "scripts", "file-growth-report.mjs"), "--help"],
+    { encoding: "utf8" },
+  );
+
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /Usage: node file-growth-report\.mjs/);
 });
 
 test("reports an exact selected head instead of silently using current HEAD", () => {
