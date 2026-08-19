@@ -1,18 +1,35 @@
 ---
 name: improve-codebase-architecture
-description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.
+description: Scan a codebase for evidence-backed simplifications or deepening opportunities, then report or grill through the strongest candidates.
 ---
 
 # Improve Codebase Architecture
 
-Surface architectural friction and propose **deepening opportunities** — refactors that turn shallow modules into deep ones. The aim is testability and AI-navigability.
+Survey existing architecture in one of two modes:
+
+- **Subtractive audit** finds machinery that can be removed, collapsed, or replaced for a real net reduction. It returns a read-only text report and stops.
+- **Deepening survey** surfaces refactors that turn shallow modules into deep ones, then presents them visually and grills through a candidate the user picks. The aim is testability and AI-navigability.
+
+## Choose the mode
+
+| The user wants to… | Route |
+| --- | --- |
+| Find over-design, over-defensive code, dead or duplicate machinery, speculative abstractions, or concrete simplifications in existing code | Run the **subtractive audit** below. |
+| Find better seams, improve testability or AI-navigability, or survey architectural friction without a specifically subtractive request | Run the **deepening survey** below. An unqualified invocation keeps this existing default. |
+| Review a branch, pull request, working-tree diff, or changes since a fixed point | Stop and use `$code-review`; do not create a second review workflow here. |
+
+Before either survey, read the applicable repository guidance, `CONTEXT.md`, and ADRs. Repo-local owners and contracts override generic architecture heuristics.
+
+## Subtractive audit
+
+Read [references/subtractive-audit.md](references/subtractive-audit.md) and follow it completely. This mode is evidence-only: do not write to the repository, generate the HTML report, start the grilling loop, or continue into implementation. Stop after returning the text report.
+
+## Deepening survey
 
 This command is _informed_ by the project's domain model and built on a shared design vocabulary:
 
 - Use `$codebase-design` for the architecture vocabulary (**module**, **interface**, **depth**, **seam**, **adapter**, **leverage**, **locality**) and its principles (the deletion test, "the interface is the test surface", "one adapter = hypothetical seam, two = real"). Use these terms exactly in every suggestion — don't drift into "component," "service," "API," or "boundary."
 - The domain language in `CONTEXT.md` gives names to good seams; ADRs in `docs/adr/` record decisions this command should not re-litigate.
-
-## Process
 
 ### 1. Explore
 

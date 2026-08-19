@@ -55,9 +55,11 @@ Look for the originating spec, in this order:
 
 ### 3. Identify the standards sources
 
-Anything in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`.
+Start with every applicable `AGENTS.md` — parent/root guidance plus any nested file governing a changed path — then include anything else in the repo that documents how code should be written, such as `CODING_STANDARDS.md` or `CONTRIBUTING.md`.
 
 The Standards axis also reviews **file growth and responsibility placement**. Use the growth report to choose where to inspect, then read the relevant hunks and surrounding owner. Report a judgement-call finding only when the diff concentrates a distinct responsibility, state owner, external interaction, policy, or independently testable behaviour in a file that should not own it, or materially worsens Divergent Change. Line count alone is never a finding. Do not recommend splitting generated/data catalogues solely for size, and do not propose pass-through helpers, thin wrappers, or seams without a real variation boundary. A useful extraction has a small interface, owns meaningful implementation, and reduces what callers must understand.
+
+The Standards axis also reviews **mechanism growth**. When the diff adds or expands an abstraction, state owner, fallback, compatibility path, guard, cache, configuration surface, or extension point, require at least one verified current need: a user/spec requirement, an applicable repo contract, or a reachable production consumer. Tests, examples, and historical implementation alone do not establish a production need. If none exists, report `possible Speculative Generality`, cite the evidence, and name the smaller complete alternative. This is always a judgement call; suppress it when a verified contract or consumer justifies the mechanism.
 
 On top of whatever the repo documents, the Standards axis always carries the **smell baseline** below — a fixed set of Fowler code smells (_Refactoring_, ch.3) that applies even when a repo documents nothing. Two rules bind it:
 
@@ -74,7 +76,7 @@ Each smell reads *what it is* → *how to fix*; match it against the diff:
 - **Repeated Switches** — the same `switch`/`if`-cascade on the same type recurs across the change. → replace with polymorphism, or one map both sites share.
 - **Shotgun Surgery** — one logical change forces scattered edits across many files in the diff. → gather what changes together into one module.
 - **Divergent Change** — one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
-- **Speculative Generality** — abstraction, parameters, or hooks added for needs the spec doesn't have. → delete it; inline back until a real need shows.
+- **Speculative Generality** — abstraction, parameters, or hooks added for a need neither the current spec, a repo contract, nor a reachable production consumer has. → delete it; inline back until a real need shows.
 - **Message Chains** — long `a.b().c().d()` navigation the caller shouldn't depend on. → hide the walk behind one method on the first object.
 - **Middle Man** — a class or function that mostly just delegates onward. → cut it, call the real target direct.
 - **Refused Bequest** — a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
@@ -96,8 +98,9 @@ Both axes use the following rules to substantiate findings within their own ques
 - The file-growth report, explicitly labelled as triage rather than a threshold or finding.
 - The list of standards-source files you found in step 3, **plus the smell baseline from step 3** pasted in full — the sub-agent has no other access to it.
 - The file-growth responsibility rule from step 3 pasted in full.
+- The mechanism-growth rule from step 3 pasted in full.
 - The shared evidence discipline from step 4 pasted in full.
-- The brief: "Review only the declared scope. Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); (b) any baseline smell you spot: name it and quote the hunk; and (c) any responsibility-placement problem supported by the growth triage and inspected code. Use the shared evidence discipline to verify claims on this axis, not to start a separate general-bug review. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells and growth findings are always judgement calls, and a documented repo standard overrides the baseline. Never report line count alone or recommend a pass-through split. Skip anything tooling enforces. Do not invoke $code-review or spawn further agents; perform this axis directly. Under 400 words."
+- The brief: "Review only the declared scope. Report — per file/hunk where relevant — (a) every place the diff violates a documented standard: cite the standard (file + the rule); (b) any baseline smell you spot: name it and quote the hunk; and (c) any responsibility-placement or unsupported mechanism-growth problem supported by the growth triage and inspected code. Use the shared evidence discipline to verify claims on this axis, not to start a separate general-bug review. Distinguish hard violations from judgement calls — documented-standard breaches can be hard, but baseline smells, responsibility-placement findings, and mechanism-growth findings are always judgement calls, and a documented repo standard overrides the baseline. Never report line count alone or recommend a pass-through split. Skip anything tooling enforces. Do not invoke $code-review or spawn further agents; perform this axis directly. Under 400 words."
 
 **Spec sub-agent prompt** — include:
 

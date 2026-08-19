@@ -23,7 +23,7 @@ The default scope is committed work from the merge-base through the selected hea
 
 ## Prerequisites
 
-The Standards axis needs nothing. It reads whatever the repo documents (`CODING_STANDARDS.md`, `CONTRIBUTING.md`, and the like) and falls back on a built-in baseline when the repo documents nothing.
+The Standards axis needs no extra setup. It starts with every applicable `AGENTS.md` — parent/root guidance and any nested file governing a changed path — then reads whatever else the repo documents (`CODING_STANDARDS.md`, `CONTRIBUTING.md`, and the like). Built-in baselines remain available when the repo documents nothing.
 
 The Spec axis needs a spec to exist and be findable. It looks in this order:
 
@@ -39,13 +39,15 @@ Step 1 depends on `docs/agents/issue-tracker.md`, which [setup-matt-pocock-skill
 | | Standards | Spec |
 | --- | --- | --- |
 | Question | Is it built right? | Is it the right thing? |
-| Reads | The repo's documented standards, plus the smell baseline | The originating issue or spec |
+| Reads | Applicable `AGENTS.md` files and other documented standards, plus the smell and mechanism-growth baselines | The originating issue or spec |
 | Reports | Documented breaches (can be hard), and smells (always judgement calls) | Missing or partial requirements, scope creep, requirements implemented wrongly |
 | Every finding cites | The standards file and the rule, or the named smell plus the hunk | The line of the spec |
 
-A generic review skill that does not know your standards is the thing this design is trying to avoid — it flags what is deliberate in your codebase and misses the invariants your codebase actually depends on. So the repo's own documentation is the [primary source](https://www.aihero.dev/ai-coding-dictionary/primary-source) on the Standards axis, and **the repo always overrides**.
+A generic review skill that does not know your standards is the thing this design is trying to avoid — it flags what is deliberate in your codebase and misses the invariants your codebase actually depends on. So every applicable `AGENTS.md` and the repo's other documentation are the [primary sources](https://www.aihero.dev/ai-coding-dictionary/primary-source) on the Standards axis, and **the repo always overrides**.
 
 The **smell baseline** is the floor underneath it: twelve Fowler code smells from _Refactoring_ ch.3 — Mysterious Name, Duplicated Code, Feature Envy, Data Clumps, Primitive Obsession, Repeated Switches, Shotgun Surgery, Divergent Change, Speculative Generality, Message Chains, Middle Man, Refused Bequest. Each is a labelled heuristic ("possible Feature Envy"), never a hard violation, and each is stated as *what it is* → *how to fix*, so a finding arrives with a move attached rather than a complaint. Anything your linter already enforces is skipped by both axes.
+
+The **mechanism-growth baseline** handles a narrower diff question: when the change adds or expands an abstraction, state owner, fallback, compatibility path, guard, cache, configuration surface or extension point, what current need pays for it? A current user/spec requirement, applicable repo contract or reachable production consumer is evidence; tests, examples and historical implementation alone are not. With no verified need, Standards may report `possible Speculative Generality` and name the smaller complete alternative. A verified contract or consumer suppresses the finding, even when a simpler shape is imaginable.
 
 Both axes share an evidence discipline without becoming a third review axis: trace both sides of changed interfaces, follow resource and async lifecycles to cleanup/error paths, verify the real shipped entry or registration, and check whether tests actually observe the target invariant. These checks substantiate a Standards or Spec finding; they do not turn the skill into a general bug hunt.
 
@@ -58,6 +60,10 @@ This is the most reported problem with the skill, and it is not fixed. Claude Co
 **Its sub-agents keep invoking `/code-review` again and spawn more agents.**
 
 Fixed in this skill. Both sub-agent briefs now say not to invoke `$code-review` or spawn additional agents, so the Standards and Spec workers perform their assigned axis directly instead of rediscovering the parent workflow.
+
+**Does the mechanism-growth check duplicate `AGENTS.md`?**
+
+It overlaps at the enforcement point, not at the ownership point. `AGENTS.md` remains the authoritative project policy, and a finding cites that file whenever it supplies the rule. The built-in baseline is only a cross-repo floor and an explicit instruction for the Standards worker to test new machinery in the declared diff. The repo overrides it, untouched existing code stays out of scope, and it adds neither a third axis nor another sub-agent.
 
 **Should I run it in the same [session](https://www.aihero.dev/ai-coding-dictionary/session) that wrote the code?**
 
@@ -86,6 +92,7 @@ Yes, when you declare a worktree review. That scope includes committed, staged, 
 - Its manifest resolves exact base/head/merge-base SHAs and keeps committed, staged, unstaged, and untracked paths separate.
 - The report arrives as two separate blocks under `## Standards` and `## Spec`, not one merged list.
 - Every Standards finding names either a rule in one of your repo's files or one of the twelve smells, with the hunk quoted; every Spec finding quotes a line of the spec.
+- A mechanism-growth finding names the added mechanism, the missing current contract or production consumer, and the smaller complete alternative; justified mechanisms are suppressed.
 - Findings that depend on an interface, lifecycle, runtime entry, or test cite the corresponding producer/consumer, cleanup path, shipped wiring, or sensitive assertion instead of inferring from an isolated helper.
 - The closing summary gives a worst issue per axis and declines to pick an overall winner.
 - With no spec available, the Spec block says so instead of listing requirements it inferred from the code.

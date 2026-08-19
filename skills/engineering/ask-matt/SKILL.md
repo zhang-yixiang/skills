@@ -48,7 +48,7 @@ A starting situation that generates work, then merges onto the main flow.
 
 Not feature work — upkeep.
 
-- **`$improve-codebase-architecture`** — run whenever you have a spare moment to keep the codebase good for agents to operate in. It surfaces **deepening opportunities**; picking one _generates an idea_ you can take into the main flow at `$grill-with-docs`. It's the survey that finds the candidates; **`$codebase-design`** (below) is the bench you design the chosen one on.
+- **`$improve-codebase-architecture`** — an explicit two-mode survey of existing code. Ask for a **subtractive audit** to find evidence-backed removals, duplicate owners, or speculative machinery; it returns a read-only text report and stops. Use the **deepening survey** to find shallow modules and better seams; picking one _generates an idea_ you can take into the main flow at `$grill-with-docs`. For a branch, PR, or fixed diff, use `$code-review` instead. **`$codebase-design`** (below) remains the bench for designing a chosen module.
 
 ## Vocabulary underneath
 
@@ -74,7 +74,7 @@ Read [PHASE-BOUNDARIES.md](PHASE-BOUNDARIES.md) for the ordered tree — the fiv
 Off the main flow entirely.
 
 - **`$grill-me`** — the same relentless interview as `$grill-with-docs`, but **stateless**: it saves nothing locally and builds no `CONTEXT.md`. Reach for it when you are **not working in a working directory** — sharpening a plan, a design, a piece of writing, anything with no repo under it. If you are in a working directory, use `$grill-with-docs` instead: it runs the same interview and leaves a paper trail, so it is strictly the better one.
-- **`$grilling`** — the interview primitive itself: rounds, the frontier, facts are the agent's job and decisions are yours. `$grill-me` and `$grill-with-docs` are the two named ways in, and `$triage`, `$wayfinder` and `$improve-codebase-architecture` all run it internally. Reach for it directly only when you want the interview with no wrapper around it.
+- **`$grilling`** — the interview primitive itself: rounds, the frontier, facts are the agent's job and decisions are yours. `$grill-me` and `$grill-with-docs` are the two named ways in, and `$triage`, `$wayfinder` and the deepening mode of `$improve-codebase-architecture` run it internally. Reach for it directly only when you want the interview with no wrapper around it.
 - **`$resolving-merge-conflicts`** — work an in-progress merge or rebase conflict hunk by hunk, resolving by **intent** traced to each side's primary source rather than by picking lines, then finish the operation. It never runs `--abort`. Standalone and off every flow: reach for it when you are already mid-conflict.
 - **`$prototype`** — a small, throwaway program that answers one design question: does this state model feel right, or what should this UI look like. Throwaway is a constraint on how the code is written, not a promise to destroy it: the answer folds into the real code, and the prototype itself is kept as a **primary source** on a `prototype/<name>` branch out of main, pointed at from the implementation issue. It's the detour in step 2 of the main flow, but reach for it any time a design question is hard to settle on paper.
 - **`$research`** — delegate reading legwork to a **background agent**: it investigates a question against **primary sources**, then leaves a cited Markdown file in the repo. Keep working while it reads. The file it produces is something to take *into* the main flow at `$grill-with-docs` — research feeds the thinking, it doesn't replace it.
