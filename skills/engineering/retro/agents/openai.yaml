@@ -1,0 +1,5 @@
+interface:
+  display_name: "Retro"
+  short_description: "Learn from costly or recurring development friction"
+policy:
+  allow_implicit_invocation: false

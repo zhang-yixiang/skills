@@ -1,0 +1,5 @@
+interface:
+  display_name: "Implement Spec"
+  short_description: "Coordinate a task graph and integrate locally"
+policy:
+  allow_implicit_invocation: true
