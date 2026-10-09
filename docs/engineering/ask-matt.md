@@ -9,7 +9,7 @@ Invoke when choosing a skill is unclear. An already clear implementation request
 ## Common questions
 
 **What is the default local path?**
-One task goes to implement. An agreed multi-task graph goes to implement-spec. A settled discussion may need to-spec; a spec needing an actionable graph may need to-tickets, then implement-spec. Do not manufacture missing stages that the task does not need.
+One task goes to implement for implementation, independent review, and a local commit by default. An agreed multi-task graph goes to implement-spec. A settled discussion may need to-spec; a spec needing an actionable graph may need to-tickets, then implement-spec. Do not manufacture missing stages that the task does not need.
 
 **What about an existing GitHub parent Issue?**
 Implement-spec can read its configured tracker directly. This repository does not require a personal adapter. Use the configured tracker and bundled helper directly.

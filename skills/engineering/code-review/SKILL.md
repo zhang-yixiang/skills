@@ -5,7 +5,7 @@ description: Review a declared committed or working-tree change for correctness,
 
 # Code Review
 
-Standards and Spec are complementary questions, not a mandatory pair of agents. Review the actual change and report actionable findings supported by a reachable scenario or applicable contract.
+Standards and Spec are reviewed by independent parallel sub-agents. Review the actual change and report actionable findings supported by a reachable scenario or applicable contract.
 
 ## Pin the scope
 
@@ -36,7 +36,7 @@ The spec may be the user's request, agreed conversation, a supplied file, or an 
 - For abstractions, state, fallbacks, caches, or extension points, identify a current requirement, repository contract, or reachable production need. If none is evidenced, explain the smaller complete alternative and uncertainty. Tests or examples alone do not establish a production requirement.
 - For responsibility changes, inspect actual owners and coupling. Duplication, speculative generality, message chains, and divergent change are leads, not automatic violations. Do not split files solely for length or replace duplication with pass-through wrappers.
 
-Use one reviewer for a small scope. Delegate distinct substantial risks when it improves independent reasoning and delegation is available and authorized. Give every reviewer the same pinned scope and relevant sources, prevent recursive review delegation, and wait for the actual reports before aggregating. Do not mandate a particular transport or number of reviewers.
+Spawn two independent sub-agents in parallel, including for small changes: one checks Standards against applicable repository rules, and one checks Spec against the requested behavior and scope. Give both the same pinned change scope and the sources relevant to their axis; instruct them to return findings directly without further review delegation. Wait for both reports before aggregating. The parent agent's self-review does not replace either sub-agent. If no spec or user acceptance request is available, run Standards and explicitly report Spec as skipped. If required delegation is unavailable or prohibited by a higher-priority instruction, report the blocker and leave independent review incomplete.
 
 ## Report and recheck
 

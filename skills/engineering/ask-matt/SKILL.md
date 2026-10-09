@@ -9,7 +9,7 @@ Before describing another skill's behavior or recommending a step be skipped, re
 
 ## Local delivery
 
-- **One bounded task:** `$implement` handles implementation, relevant validation, local review, and a scoped commit when authorized.
+- **One bounded task:** `$implement` handles implementation, relevant validation, independent review, and a scoped local commit by default, unless the user asks to leave changes uncommitted.
 - **An agreed multi-task plan with dependencies:** `$implement-spec` coordinates independent work and owns local integration and final review.
 - **Existing tracker tickets or a parent Issue with children:** `$implement-spec` reads the configured tracker and the existing graph directly. No external personal adapter is required. After `$to-tickets`, continue to `$implement-spec` when the user has requested delivery; planning alone is not authorization to implement.
 
@@ -26,7 +26,7 @@ Read the runtime's invocation and delegation rules and respect the user's author
 ## Investigation and review
 
 - A difficult bug: `$diagnosing-bugs` establishes a tight failing feedback loop and a regression check. Consider `$retro` only if the incident reveals recurring or costly process friction.
-- Local or committed change review: `$code-review`. Standards and Spec are perspectives; reviewer count and evidence depth follow the actual risk.
+- Local or committed change review: `$code-review` runs independent Standards and Spec sub-agents in parallel; evidence depth follows the actual risk.
 - Existing architecture friction: `$improve-codebase-architecture` for evidence-backed simplification or better ownership; `$codebase-design` for module/interface vocabulary. An audit does not automatically generate HTML or start implementation.
 - Test-first behavior: `$tdd`, through meaningful public boundaries. Do not introduce low-value tests just to follow a ritual.
 
